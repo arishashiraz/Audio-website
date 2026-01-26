@@ -2,62 +2,92 @@ import { useState } from "react";
 
 function App() {
   const [file, setFile] = useState(null);
-  const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
+
+  const handleDrop = (e) => {
+    e.preventDefault();
+    const droppedFile = e.dataTransfer.files[0];
+    if (droppedFile && droppedFile.type.startsWith("audio/")) {
+      setFile(droppedFile);
+    } else {
+      alert("Please drop an audio file");
+    }
+  };
 
   const handleDragOver = (e) => {
     e.preventDefault();
   };
 
-  const handleDrop = (e) => {
-    e.preventDefault();
-    setError("");
-
-    const droppedFile = e.dataTransfer.files[0];
-
-    if (!droppedFile) {
-      setError("No file detected");
+  const compressAudio = async () => {
+    if (!file) {
+      alert("No file selected");
       return;
     }
 
-    if (!droppedFile.type.startsWith("audio/")) {
-      setError("Please drop an audio file only");
-      return;
-    }
+    setLoading(true);
 
-    setFile(droppedFile);
+    const formData = new FormData();
+    formData.append("audio", file); // MUST be "audio"
+
+    try {
+      const response = await fetch("http://localhost:5000/compress", {
+        method: "POST",
+        body: formData,
+      });
+
+      if (!response.ok) {
+        throw new Error("Compression failed");
+      }
+
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "compressed.mp3";
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+
+      window.URL.revokeObjectURL(url);
+    } catch (err) {
+      alert(err.message);
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
-    <div style={{ textAlign: "center", marginTop: "80px" }}>
-      <h1>Audio Compressor</h1>
-
+    <div
+      onDrop={handleDrop}
+      onDragOver={handleDragOver}
+      style={{
+        height: "100vh",
+        display: "flex",
+        flexDirection: "column",
+        alignItems: "center",
+        justifyContent: "center",
+        gap: "20px",
+      }}
+    >
       <div
-        onDragOver={handleDragOver}
-        onDrop={handleDrop}
         style={{
-          width: "320px",
-          height: "160px",
-          border: "2px dashed #333",
-          margin: "20px auto",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          cursor: "pointer",
+          border: "2px dashed #555",
+          padding: "40px",
+          width: "300px",
+          textAlign: "center",
         }}
       >
-        Drag & Drop Audio File Here
+        {file ? file.name : "Drag & drop audio file here"}
       </div>
 
-      {file && (
-        <p>
-          <strong>Selected File:</strong> {file.name}
-        </p>
-      )}
-
-      {error && <p style={{ color: "red" }}>{error}</p>}
+      <button onClick={compressAudio} disabled={loading}>
+        {loading ? "Compressing..." : "Compress Audio"}
+      </button>
     </div>
   );
 }
 
 export default App;
+
 
