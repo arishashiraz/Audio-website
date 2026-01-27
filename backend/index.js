@@ -24,7 +24,8 @@ app.post("/compress", upload.single("audio"), (req, res) => {
   const outputFileName = `compressed-${Date.now()}.mp3`;
   const outputPath = path.join("output", outputFileName);
 
-  const command = `ffmpeg -y -i ${inputPath} -b:a 96k ${outputPath}`;
+  const bitrate = req.body.bitrate || "96k";
+  const command = `ffmpeg -y -i ${inputPath} -b:a ${bitrate} ${outputPath}`;
 
   exec(command, (error) => {
     if (error) {
