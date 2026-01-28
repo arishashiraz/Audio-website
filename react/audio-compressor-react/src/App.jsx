@@ -1,130 +1,124 @@
 import { useState } from "react";
+import "./App.css";
+
+const API_URL = import.meta.env.VITE_API_URL;
 
 function App() {
   const [file, setFile] = useState(null);
+  const [bitrate, setBitrate] = useState("96");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
-  const [success, setSuccess] = useState("");
-  const [originalSize, setOriginalSize] = useState(null);
-  const [compressedSize, setCompressedSize] = useState(null);
-  const [bitrate, setBitrate] = useState("96k");
 
+  // Handle file select (click OR drop)
+  const handleFile = (selectedFile) => {
+    if (!selectedFile) return;
+
+    if (!selectedFile.type.startsWith("audio/")) {
+      setError("Please upload an audio file only");
+      return;
+    }
+
+    setError("");
+    setFile(selectedFile);
+  };
+
+  // Drag & drop
   const handleDrop = (e) => {
     e.preventDefault();
-    setError("");
-    setSuccess("");
-
-    const droppedFile = e.dataTransfer.files[0];
-
-    if (droppedFile && droppedFile.type.startsWith("audio/")) {
-      setFile(droppedFile);
-      setOriginalSize((droppedFile.size / 1024 / 1024).toFixed(2));
-      setCompressedSize(null);
-    } else {
-      setError("Please drop a valid audio file");
-    }
+    handleFile(e.dataTransfer.files[0]);
   };
 
   const handleDragOver = (e) => {
     e.preventDefault();
   };
 
-  const compressAudio = async () => {
+  // Click upload (mobile friendly)
+  const handleInputChange = (e) => {
+    handleFile(e.target.files[0]);
+  };
+
+  // Compress
+  const handleCompress = async () => {
     if (!file) {
-      setError("No audio file selected");
+      setError("Please select an audio file first");
       return;
     }
 
     setLoading(true);
     setError("");
-    setSuccess("");
-
-    const formData = new FormData();
-    formData.append("audio", file);
-    formData.append("bitrate", bitrate);
 
     try {
-      const response = await fetch("http://localhost:5000/compress", {
+      const formData = new FormData();
+      formData.append("audio", file);
+      formData.append("bitrate", bitrate);
+
+      const response = await fetch(`${API_URL}/compress`, {
         method: "POST",
         body: formData,
       });
 
       if (!response.ok) {
-        throw new Error("Compression failed. Try again.");
+        throw new Error("Compression failed");
       }
 
       const blob = await response.blob();
-      setCompressedSize((blob.size / 1024 / 1024).toFixed(2));
-
       const url = window.URL.createObjectURL(blob);
+
       const a = document.createElement("a");
       a.href = url;
       a.download = "compressed.mp3";
       document.body.appendChild(a);
       a.click();
       a.remove();
-      window.URL.revokeObjectURL(url);
 
-      setSuccess("🎉 Audio compressed successfully!");
+      window.URL.revokeObjectURL(url);
     } catch (err) {
-      setError(err.message);
+      setError(err.message || "Something went wrong");
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <div
-      onDrop={handleDrop}
-      onDragOver={handleDragOver}
-      style={{
-        height: "100vh",
-        display: "flex",
-        flexDirection: "column",
-        alignItems: "center",
-        justifyContent: "center",
-        gap: "16px",
-        fontFamily: "sans-serif",
-      }}
-    >
-      <h2>🎧 Audio Compressor</h2>
+    <div className="container">
+      <h1>🎧 Audio Compressor</h1>
 
       <div
-        style={{
-          border: "2px dashed #555",
-          padding: "40px",
-          width: "320px",
-          textAlign: "center",
-          borderRadius: "8px",
-          background: "#fafafa",
-        }}
+        className="drop-zone"
+        onDrop={handleDrop}
+        onDragOver={handleDragOver}
+        onClick={() => document.getElementById("fileInput").click()}
       >
-        {file ? `🎵 ${file.name}` : "Drag & drop audio file here"}
+        {file ? (
+          <p>{file.name}</p>
+        ) : (
+          <p>Drag & drop audio here or click to upload</p>
+        )}
       </div>
 
-      <select
-        value={bitrate}
-        onChange={(e) => setBitrate(e.target.value)}
-        style={{ padding: "8px" }}
-      >
-        <option value="96k">96 kbps (Smaller size)</option>
-        <option value="128k">128 kbps (Balanced)</option>
-        <option value="192k">192 kbps (Better quality)</option>
+      <input
+        id="fileInput"
+        type="file"
+        accept="audio/*"
+        hidden
+        onChange={handleInputChange}
+      />
+
+      <select value={bitrate} onChange={(e) => setBitrate(e.target.value)}>
+        <option value="64">64 kbps (Very Small)</option>
+        <option value="96">96 kbps (Small)</option>
+        <option value="128">128 kbps (Balanced)</option>
+        <option value="192">192 kbps (High Quality)</option>
       </select>
 
-      <button onClick={compressAudio} disabled={loading}>
+      <button onClick={handleCompress} disabled={loading}>
         {loading ? "Compressing..." : "Compress Audio"}
       </button>
 
-      {loading && <div>⏳ Compressing audio...</div>}
-      {error && <div style={{ color: "red" }}>❌ {error}</div>}
-      {success && <div style={{ color: "green" }}>{success}</div>}
-
-      {originalSize && <div>📦 Original size: {originalSize} MB</div>}
-      {compressedSize && <div>🗜️ Compressed size: {compressedSize} MB</div>}
+      {loading && <p className="loading">⏳ Processing… please wait</p>}
+      {error && <p className="error">❌ {error}</p>}
     </div>
   );
 }
 
 export default App;
-
