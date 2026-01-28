@@ -5,47 +5,46 @@ const API_URL = import.meta.env.VITE_API_URL;
 
 function App() {
   const [file, setFile] = useState(null);
-  const [bitrate, setBitrate] = useState("96");
+  const [bitrate, setBitrate] = useState("96k");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [success, setSuccess] = useState("");
+  const [originalSize, setOriginalSize] = useState(null);
 
-  // Handle file select (click OR drop)
-  const handleFile = (selectedFile) => {
-    if (!selectedFile) return;
+  /* ================= FILE HANDLERS ================= */
 
-    if (!selectedFile.type.startsWith("audio/")) {
-      setError("Please upload an audio file only");
+  const handleFileSelect = (f) => {
+    if (!f) return;
+
+    if (!f.type.startsWith("audio/")) {
+      setError("Please select an audio file");
       return;
     }
 
     setError("");
-    setFile(selectedFile);
+    setSuccess("");
+    setFile(f);
+    setOriginalSize((f.size / (1024 * 1024)).toFixed(2));
   };
 
-  // Drag & drop
   const handleDrop = (e) => {
     e.preventDefault();
-    handleFile(e.dataTransfer.files[0]);
+    handleFileSelect(e.dataTransfer.files[0]);
   };
 
-  const handleDragOver = (e) => {
-    e.preventDefault();
-  };
+  const handleDragOver = (e) => e.preventDefault();
 
-  // Click upload (mobile friendly)
-  const handleInputChange = (e) => {
-    handleFile(e.target.files[0]);
-  };
+  /* ================= COMPRESS ================= */
 
-  // Compress
-  const handleCompress = async () => {
+  const compressAudio = async () => {
     if (!file) {
-      setError("Please select an audio file first");
+      setError("No audio file selected");
       return;
     }
 
     setLoading(true);
     setError("");
+    setSuccess("");
 
     try {
       const formData = new FormData();
@@ -66,21 +65,24 @@ function App() {
 
       const a = document.createElement("a");
       a.href = url;
-      a.download = "compressed.mp3";
+      a.download = `compressed-${file.name}`;
       document.body.appendChild(a);
       a.click();
       a.remove();
 
-      window.URL.revokeObjectURL(url);
+      setSuccess("Compression successful! File downloaded.");
     } catch (err) {
-      setError(err.message || "Something went wrong");
+      console.error(err);
+      setError("Failed to fetch / compress audio");
     } finally {
       setLoading(false);
     }
   };
 
+  /* ================= UI ================= */
+
   return (
-    <div className="container">
+    <div className="app">
       <h1>🎧 Audio Compressor</h1>
 
       <div
@@ -90,7 +92,7 @@ function App() {
         onClick={() => document.getElementById("fileInput").click()}
       >
         {file ? (
-          <p>{file.name}</p>
+          <p>🎵 {file.name}</p>
         ) : (
           <p>Drag & drop audio here or click to upload</p>
         )}
@@ -101,22 +103,26 @@ function App() {
         type="file"
         accept="audio/*"
         hidden
-        onChange={handleInputChange}
+        onChange={(e) => handleFileSelect(e.target.files[0])}
       />
 
       <select value={bitrate} onChange={(e) => setBitrate(e.target.value)}>
-        <option value="64">64 kbps (Very Small)</option>
-        <option value="96">96 kbps (Small)</option>
-        <option value="128">128 kbps (Balanced)</option>
-        <option value="192">192 kbps (High Quality)</option>
+        <option value="64k">64 kbps (Very small)</option>
+        <option value="96k">96 kbps (Smaller size)</option>
+        <option value="128k">128 kbps (Balanced)</option>
+        <option value="192k">192 kbps (High quality)</option>
       </select>
 
-      <button onClick={handleCompress} disabled={loading}>
+      <button onClick={compressAudio} disabled={loading}>
         {loading ? "Compressing..." : "Compress Audio"}
       </button>
 
-      {loading && <p className="loading">⏳ Processing… please wait</p>}
       {error && <p className="error">❌ {error}</p>}
+      {success && <p className="success">✅ {success}</p>}
+
+      {originalSize && (
+        <p className="info">📦 Original size: {originalSize} MB</p>
+      )}
     </div>
   );
 }
