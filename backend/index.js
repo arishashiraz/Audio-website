@@ -1,65 +1,101 @@
-const express = require("express");
-const cors = require("cors");
-const multer = require("multer");
-const { exec } = require("child_process");
-const path = require("path");
-const fs = require("fs");
+import express from "express";
+import cors from "cors";
+import multer from "multer";
+import { exec } from "child_process";
+import fs from "fs";
+import path from "path";
 
 const app = express();
+const PORT = process.env.PORT || 10000;
 
-/* ===================== CORS ===================== */
-app.use(
-  cors({
-    origin: "*", // later we will restrict this
-    methods: ["GET", "POST"],
-  })
-);
+/* =========================
+   CORS CONFIG (VERY IMPORTANT)
+========================= */
+app.use(cors({
+  origin: [
+    "https://audio-compressor-six.vercel.app", // Vercel frontend
+    "http://localhost:5173"                    // Local dev
+  ],
+  methods: ["GET", "POST", "OPTIONS"],
+  allowedHeaders: ["Content-Type"],
+}));
 
-/* ===================== FOLDERS ===================== */
+// Handle preflight requests
+app.options("*", cors());
+
+/* =========================
+   BASIC MIDDLEWARE
+========================= */
+app.use(express.json());
+
+/* =========================
+   FOLDERS
+========================= */
 const uploadDir = "uploads";
 const outputDir = "output";
 
 if (!fs.existsSync(uploadDir)) fs.mkdirSync(uploadDir);
 if (!fs.existsSync(outputDir)) fs.mkdirSync(outputDir);
 
-/* ===================== MULTER ===================== */
-const upload = multer({ dest: uploadDir });
+/* =========================
+   MULTER CONFIG
+========================= */
+const storage = multer.diskStorage({
+  destination: uploadDir,
+  filename: (req, file, cb) => {
+    cb(null, Date.now() + "-" + file.originalname);
+  },
+});
 
-/* ===================== TEST ROUTE ===================== */
+const upload = multer({ storage });
+
+/* =========================
+   ROUTES
+========================= */
+
+// Health check
 app.get("/", (req, res) => {
   res.send("Audio Compressor Backend is running 🚀");
 });
 
-/* ===================== COMPRESS ROUTE ===================== */
+// Compression route
 app.post("/compress", upload.single("audio"), (req, res) => {
-  if (!req.file) {
-    return res.status(400).json({ error: "No audio file uploaded" });
-  }
-
-  const bitrate = req.body.bitrate || "96k";
-
-  const inputPath = req.file.path;
-  const outputPath = path.join(
-    outputDir,
-    `compressed-${Date.now()}.mp3`
-  );
-
-  const command = `ffmpeg -i ${inputPath} -b:a ${bitrate} ${outputPath}`;
-
-  exec(command, (error) => {
-    if (error) {
-      console.error(error);
-      return res.status(500).json({ error: "Compression failed" });
+  try {
+    if (!req.file) {
+      return res.status(400).json({ error: "No audio file uploaded" });
     }
 
-    res.download(outputPath, () => {
-      fs.unlinkSync(inputPath);
+    const bitrate = req.body.bitrate || "96k";
+
+    const inputPath = req.file.path;
+    const outputPath = path.join(
+      outputDir,
+      `compressed-${Date.now()}.mp3`
+    );
+
+    const command = `ffmpeg -y -i "${inputPath}" -b:a ${bitrate} "${outputPath}"`;
+
+    exec(command, (error) => {
+      if (error) {
+        console.error("FFmpeg error:", error);
+        return res.status(500).json({ error: "Compression failed" });
+      }
+
+      res.download(outputPath, () => {
+        fs.unlinkSync(inputPath);
+        fs.unlinkSync(outputPath);
+      });
     });
-  });
+
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Server error" });
+  }
 });
 
-/* ===================== START SERVER ===================== */
-const PORT = process.env.PORT || 10000;
-app.listen(PORT, () =>
-  console.log(`Server running on port ${PORT}`)
-);
+/* =========================
+   START SERVER
+========================= */
+app.listen(PORT, () => {
+  console.log(`Server running on port ${PORT}`);
+});
