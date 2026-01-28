@@ -1,52 +1,44 @@
 import { useState } from "react";
-import "./App.css";
-
-const API_URL = import.meta.env.VITE_API_URL;
 
 function App() {
   const [file, setFile] = useState(null);
   const [bitrate, setBitrate] = useState("96k");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
-  const [success, setSuccess] = useState("");
   const [originalSize, setOriginalSize] = useState(null);
 
-  /* ================= FILE HANDLERS ================= */
+  // 🔥 IMPORTANT: Backend URL from Vercel env
+  const API_URL = import.meta.env.VITE_API_URL;
 
-  const handleFileSelect = (f) => {
-    if (!f) return;
+  const handleFileSelect = (e) => {
+    const selectedFile = e.target.files[0];
+    if (!selectedFile) return;
 
-    if (!f.type.startsWith("audio/")) {
-      setError("Please select an audio file");
-      return;
-    }
-
+    setFile(selectedFile);
+    setOriginalSize((selectedFile.size / (1024 * 1024)).toFixed(2));
     setError("");
-    setSuccess("");
-    setFile(f);
-    setOriginalSize((f.size / (1024 * 1024)).toFixed(2));
   };
 
   const handleDrop = (e) => {
     e.preventDefault();
-    handleFileSelect(e.dataTransfer.files[0]);
+    const droppedFile = e.dataTransfer.files[0];
+    if (!droppedFile) return;
+
+    setFile(droppedFile);
+    setOriginalSize((droppedFile.size / (1024 * 1024)).toFixed(2));
+    setError("");
   };
 
-  const handleDragOver = (e) => e.preventDefault();
-
-  /* ================= COMPRESS ================= */
-
-  const compressAudio = async () => {
+  const handleCompress = async () => {
     if (!file) {
-      setError("No audio file selected");
+      setError("Please upload an audio file");
       return;
     }
 
-    setLoading(true);
-    setError("");
-    setSuccess("");
-
     try {
+      setLoading(true);
+      setError("");
+
       const formData = new FormData();
       formData.append("audio", file);
       formData.append("bitrate", bitrate);
@@ -70,58 +62,70 @@ function App() {
       a.click();
       a.remove();
 
-      setSuccess("Compression successful! File downloaded.");
     } catch (err) {
-      console.error(err);
-      setError("Failed to fetch / compress audio");
+      setError("Failed to fetch (Backend/CORS issue)");
     } finally {
       setLoading(false);
     }
   };
 
-  /* ================= UI ================= */
-
   return (
-    <div className="app">
+    <div style={{ textAlign: "center", padding: "40px" }}>
       <h1>🎧 Audio Compressor</h1>
 
+      {/* DROP ZONE */}
       <div
-        className="drop-zone"
         onDrop={handleDrop}
-        onDragOver={handleDragOver}
+        onDragOver={(e) => e.preventDefault()}
+        style={{
+          border: "2px dashed #888",
+          padding: "30px",
+          margin: "20px auto",
+          width: "60%",
+          cursor: "pointer",
+        }}
         onClick={() => document.getElementById("fileInput").click()}
       >
         {file ? (
           <p>🎵 {file.name}</p>
         ) : (
-          <p>Drag & drop audio here or click to upload</p>
+          <p>Drag & drop audio file here or click to upload</p>
         )}
       </div>
 
+      {/* FILE INPUT (IMPORTANT FOR MOBILE) */}
       <input
         id="fileInput"
         type="file"
         accept="audio/*"
-        hidden
-        onChange={(e) => handleFileSelect(e.target.files[0])}
+        style={{ display: "none" }}
+        onChange={handleFileSelect}
       />
 
+      {/* BITRATE */}
+      <br />
       <select value={bitrate} onChange={(e) => setBitrate(e.target.value)}>
         <option value="64k">64 kbps (Very small)</option>
-        <option value="96k">96 kbps (Smaller size)</option>
+        <option value="96k">96 kbps (Small)</option>
         <option value="128k">128 kbps (Balanced)</option>
         <option value="192k">192 kbps (High quality)</option>
       </select>
 
-      <button onClick={compressAudio} disabled={loading}>
+      <br /><br />
+
+      {/* BUTTON */}
+      <button onClick={handleCompress} disabled={loading}>
         {loading ? "Compressing..." : "Compress Audio"}
       </button>
 
-      {error && <p className="error">❌ {error}</p>}
-      {success && <p className="success">✅ {success}</p>}
+      {/* ERROR */}
+      {error && <p style={{ color: "red", marginTop: "15px" }}>❌ {error}</p>}
 
+      {/* INFO */}
       {originalSize && (
-        <p className="info">📦 Original size: {originalSize} MB</p>
+        <p style={{ marginTop: "10px" }}>
+          📦 Original size: {originalSize} MB
+        </p>
       )}
     </div>
   );
