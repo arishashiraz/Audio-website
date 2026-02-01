@@ -70,6 +70,20 @@ function App() {
 
   return (
     <div style={{ maxWidth: "600px", margin: "40px auto", textAlign: "center" }}>
+      {/* 🔴 DEBUG – REMOVE LATER */}
+<div
+  style={{
+    background: "#ffecec",
+    border: "1px solid red",
+    padding: "10px",
+    marginBottom: "20px",
+    textAlign: "left",
+  }}
+>
+  <b>DEBUG</b><br />
+  API_URL = {String(API_URL)}
+</div>
+
       {/* 🔴 DEBUG BLOCK – REMOVE LATER */}
       <div
         style={{
