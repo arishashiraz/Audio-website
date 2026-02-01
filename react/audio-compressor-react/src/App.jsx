@@ -1,40 +1,105 @@
-import { useEffect } from "react";
-
-const API_URL = import.meta.env.VITE_API_URL;
+import { useState } from "react";
 
 function App() {
-  useEffect(() => {
-    console.log("API_URL =", API_URL);
-  }, []);
+  const [file, setFile] = useState(null);
+  const [bitrate, setBitrate] = useState("96");
+  const [error, setError] = useState("");
+
+  const API_URL = import.meta.env.VITE_API_URL;
+
+  const handleCompress = async () => {
+    setError("");
+
+    if (!file) {
+      setError("No file selected");
+      return;
+    }
+
+    try {
+      const formData = new FormData();
+      formData.append("audio", file);
+      formData.append("bitrate", bitrate);
+
+      const response = await fetch(`${API_URL}/compress`, {
+        method: "POST",
+        body: formData,
+      });
+
+      if (!response.ok) {
+        throw new Error("Request failed");
+      }
+
+      // We are NOT handling response yet
+      // This step is only for API_URL verification
+      console.log("Request sent successfully");
+    } catch (err) {
+      console.error(err);
+      setError("Failed to fetch");
+    }
+  };
 
   return (
-    <div style={{ padding: "40px", fontFamily: "Arial" }}>
-      <h1>🎧 Audio Compressor</h1>
-
-      <h3>STEP 1 DEBUG</h3>
-
-      <p>
-        <strong>API_URL value:</strong>
-      </p>
-
-      <pre
+    <div style={{ maxWidth: "600px", margin: "40px auto", textAlign: "center" }}>
+      {/* 🔴 DEBUG BLOCK – MUST APPEAR */}
+      <div
         style={{
-          background: "#f4f4f4",
+          background: "#ffecec",
+          border: "1px solid red",
           padding: "10px",
-          borderRadius: "5px",
+          marginBottom: "20px",
+          textAlign: "left",
         }}
       >
-        {String(API_URL)}
-      </pre>
+        <b>DEBUG (remove later)</b>
+        <br />
+        API_URL = <b>{String(API_URL)}</b>
+      </div>
 
-      <p>
-        If this says <b>undefined</b>, your Vercel env variable is missing.
-      </p>
+      <h1>🎧 Audio Compressor</h1>
+
+      <div
+        style={{
+          border: "2px dashed #999",
+          padding: "30px",
+          marginBottom: "20px",
+        }}
+      >
+        Drag & drop audio file here
+        <br />
+        <br />
+        <input
+          type="file"
+          accept="audio/*"
+          onChange={(e) => setFile(e.target.files[0])}
+        />
+      </div>
+
+      <select
+        value={bitrate}
+        onChange={(e) => setBitrate(e.target.value)}
+        style={{ padding: "5px", marginBottom: "20px" }}
+      >
+        <option value="64">64 kbps (Very small)</option>
+        <option value="96">96 kbps (Smaller size)</option>
+        <option value="128">128 kbps (Balanced)</option>
+        <option value="192">192 kbps (High quality)</option>
+      </select>
+
+      <br />
+
+      <button onClick={handleCompress} style={{ padding: "8px 20px" }}>
+        Compress Audio
+      </button>
+
+      {error && (
+        <p style={{ color: "red", marginTop: "15px" }}>❌ {error}</p>
+      )}
     </div>
   );
 }
 
 export default App;
+
 
 
 
