@@ -1,77 +1,86 @@
 import { useState } from "react";
+import UploadBox from "./components/UploadBox";
+import Controls from "./components/Controls";
 
 function App() {
   const [file, setFile] = useState(null);
-  const [loading, setLoading] = useState(false);
+  const [bitrate, setBitrate] = useState("128k");
+  const [format, setFormat] = useState("mp3");
+  const [status, setStatus] = useState("");
   const [error, setError] = useState("");
-  const [responseText, setResponseText] = useState("");
 
   const API_URL = import.meta.env.VITE_API_URL;
 
-  const compressAudio = async () => {
-    console.log("Compress button clicked");
-
+  const handleCompress = async () => {
     if (!file) {
-      setError("No file selected");
+      setError("Please upload an audio file");
       return;
     }
 
-    setLoading(true);
     setError("");
-    setResponseText("");
+    setStatus("Uploading...");
 
     const formData = new FormData();
     formData.append("audio", file);
+    formData.append("bitrate", bitrate);
+    formData.append("format", format);
 
     try {
-      const res = await fetch(`${API_URL}/compress`, {
+      const response = await fetch(`${API_URL}/compress`, {
         method: "POST",
         body: formData,
       });
 
-      const text = await res.text();
+      if (!response.ok) {
+        throw new Error("Compression failed");
+      }
 
-      console.log("API response:", text);
-      setResponseText(text);
+      const text = await response.text();
+      setStatus(`Server response: ${text}`);
     } catch (err) {
       console.error(err);
-      setError("Request failed");
-    } finally {
-      setLoading(false);
+      setError("Failed to connect to server");
+      setStatus("");
     }
   };
 
   return (
-    <div style={{ padding: 40 }}>
-      <h1 style={{ color: "red" }}>DEBUG: APP.JSX ACTIVE</h1>
-      <h2 style={{ color: "blue" }}>API_URL = {API_URL}</h2>
+    <div style={{ maxWidth: "600px", margin: "40px auto" }}>
+      <h1>Audio Compressor</h1>
 
-      <hr />
+      <UploadBox onFileSelect={setFile} />
 
-      <h2>🎧 Audio Compressor</h2>
+      {file && (
+        <div style={{ marginTop: "20px" }}>
+          <p><b>File name:</b> {file.name}</p>
+          <p><b>File size:</b> {(file.size / 1024 / 1024).toFixed(2)} MB</p>
+        </div>
+      )}
 
-      <input
-        type="file"
-        accept="audio/*"
-        onChange={(e) => setFile(e.target.files[0])}
+      <Controls
+        bitrate={bitrate}
+        setBitrate={setBitrate}
+        format={format}
+        setFormat={setFormat}
       />
 
-      <br />
-      <br />
-
-      <button onClick={compressAudio} disabled={loading}>
-        {loading ? "Uploading..." : "Compress Audio"}
+      <button
+        onClick={handleCompress}
+        style={{ marginTop: "30px", padding: "10px 20px" }}
+      >
+        Compress Audio
       </button>
 
+      {status && <p style={{ color: "green" }}>{status}</p>}
       {error && <p style={{ color: "red" }}>{error}</p>}
-      {responseText && (
-        <p style={{ color: "green" }}>Server response: {responseText}</p>
-      )}
     </div>
   );
 }
 
 export default App;
+
+
+
 
 
 
