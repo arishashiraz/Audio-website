@@ -3,66 +3,49 @@ import cors from "cors";
 import multer from "multer";
 import ffmpeg from "fluent-ffmpeg";
 import ffmpegPath from "ffmpeg-static";
-import fs from "fs";
 import path from "path";
+import fs from "fs";
 
-const app = express();
-const PORT = process.env.PORT || 5000;
-
-// Tell ffmpeg where the binary is
 ffmpeg.setFfmpegPath(ffmpegPath);
 
-// Ensure folders exist
-const uploadDir = "uploads";
-const outputDir = "output";
+const app = express();
+const PORT = 5000;
 
-if (!fs.existsSync(uploadDir)) fs.mkdirSync(uploadDir);
-if (!fs.existsSync(outputDir)) fs.mkdirSync(outputDir);
-
-// Multer storage
-const upload = multer({ dest: uploadDir });
-
-app.use(cors({ origin: "*" }));
+app.use(cors());
 app.use(express.json());
+
+const upload = multer({ dest: "uploads/" });
 
 app.get("/", (req, res) => {
   res.send("Audio Compressor Backend Running");
 });
 
-// 🔊 AUDIO COMPRESSION ROUTE
 app.post("/compress", upload.single("audio"), (req, res) => {
-  try {
-    if (!req.file) {
-      return res.status(400).send("No audio file uploaded");
-    }
-
-    const bitrate = req.body.bitrate || "128k";
-
-    const inputPath = req.file.path;
-    const outputFileName = `compressed-${Date.now()}.mp3`;
-    const outputPath = path.join(outputDir, outputFileName);
-
-    ffmpeg(inputPath)
-      .audioBitrate(bitrate)
-      .toFormat("mp3")
-      .on("end", () => {
-        res.download(outputPath, outputFileName, () => {
-          fs.unlinkSync(inputPath);      // delete upload
-          fs.unlinkSync(outputPath);     // delete output
-        });
-      })
-      .on("error", (err) => {
-        console.error("FFmpeg error:", err);
-        res.status(500).send("Audio compression failed");
-      })
-      .save(outputPath);
-
-  } catch (err) {
-    console.error(err);
-    res.status(500).send("Server error");
+  if (!req.file) {
+    return res.status(400).json({ error: "No file uploaded" });
   }
+
+  const bitrate = req.body.bitrate || "128k";
+
+  const inputPath = req.file.path;
+  const outputPath = `output/compressed-${Date.now()}.mp3`;
+
+  ffmpeg(inputPath)
+    .audioBitrate(bitrate)
+    .toFormat("mp3")
+    .on("end", () => {
+      res.download(outputPath, () => {
+        fs.unlinkSync(inputPath);
+        fs.unlinkSync(outputPath);
+      });
+    })
+    .on("error", (err) => {
+      console.error(err);
+      res.status(500).json({ error: "Compression failed" });
+    })
+    .save(outputPath);
 });
 
 app.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
+  console.log(`Backend running on http://localhost:${PORT}`);
 });
