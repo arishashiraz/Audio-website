@@ -1,71 +1,68 @@
 import express from "express";
 import cors from "cors";
 import multer from "multer";
-import path from "path";
+import ffmpeg from "fluent-ffmpeg";
+import ffmpegPath from "ffmpeg-static";
 import fs from "fs";
+import path from "path";
 
 const app = express();
+const PORT = process.env.PORT || 5000;
 
-/* =========================
-   MIDDLEWARE
-========================= */
+// Tell ffmpeg where the binary is
+ffmpeg.setFfmpegPath(ffmpegPath);
+
+// Ensure folders exist
+const uploadDir = "uploads";
+const outputDir = "output";
+
+if (!fs.existsSync(uploadDir)) fs.mkdirSync(uploadDir);
+if (!fs.existsSync(outputDir)) fs.mkdirSync(outputDir);
+
+// Multer storage
+const upload = multer({ dest: uploadDir });
+
 app.use(cors({ origin: "*" }));
 app.use(express.json());
 
-/* =========================
-   MULTER SETUP
-========================= */
-const upload = multer({
-  dest: "uploads/",
-});
-
-/* =========================
-   TEST ROUTE
-========================= */
 app.get("/", (req, res) => {
-  res.send("Backend is running ✅");
+  res.send("Audio Compressor Backend Running");
 });
 
-/* =========================
-   COMPRESS ROUTE (TEST VERSION)
-   RETURNS SAME FILE AS DOWNLOAD
-========================= */
-app.post("/compress", upload.single("audio"), async (req, res) => {
+// 🔊 AUDIO COMPRESSION ROUTE
+app.post("/compress", upload.single("audio"), (req, res) => {
   try {
     if (!req.file) {
-      return res.status(400).send("No file uploaded");
+      return res.status(400).send("No audio file uploaded");
     }
 
-    const originalName = req.file.originalname;
-    const filePath = req.file.path;
+    const bitrate = req.body.bitrate || "128k";
 
-    res.setHeader(
-      "Content-Disposition",
-      `attachment; filename="compressed-${originalName}"`
-    );
+    const inputPath = req.file.path;
+    const outputFileName = `compressed-${Date.now()}.mp3`;
+    const outputPath = path.join(outputDir, outputFileName);
 
-    res.setHeader("Content-Type", req.file.mimetype);
+    ffmpeg(inputPath)
+      .audioBitrate(bitrate)
+      .toFormat("mp3")
+      .on("end", () => {
+        res.download(outputPath, outputFileName, () => {
+          fs.unlinkSync(inputPath);      // delete upload
+          fs.unlinkSync(outputPath);     // delete output
+        });
+      })
+      .on("error", (err) => {
+        console.error("FFmpeg error:", err);
+        res.status(500).send("Audio compression failed");
+      })
+      .save(outputPath);
 
-    res.sendFile(path.resolve(filePath), (err) => {
-      if (err) {
-        console.error(err);
-      }
-
-      // optional cleanup
-      fs.unlink(filePath, () => {});
-    });
   } catch (err) {
     console.error(err);
-    res.status(500).send("Compression failed");
+    res.status(500).send("Server error");
   }
 });
 
-/* =========================
-   START SERVER
-========================= */
-const PORT = process.env.PORT || 5000;
-
 app.listen(PORT, () => {
-  console.log(`🚀 Server running on port ${PORT}`);
+  console.log(`Server running on port ${PORT}`);
 });
-
