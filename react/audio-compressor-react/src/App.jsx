@@ -46,13 +46,10 @@ function App() {
 
       setMessage("Download starting… ✅");
 
-      // AUTO DOWNLOAD
-      const link = document.createElement("a");
-      link.href = `https://audio-compressor-backend.onrender.com/output/${data.file}`;
-      link.download = data.file;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
+      // ✅ RELIABLE AUTO DOWNLOAD
+      window.location.href =
+        `https://audio-compressor-backend.onrender.com/output/${data.file}`;
+
     } catch (error) {
       setMessage("Server error ❌");
     } finally {

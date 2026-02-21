@@ -26,7 +26,7 @@ const AudioSchema = new mongoose.Schema({
   originalName: String,
   compressedName: String,
   originalSize: Number,
-  createdAt: { type: Date, default: Date.now },
+  createdAt: { type: Date, default: Date.now }
 });
 
 const Audio = mongoose.model("Audio", AudioSchema);
@@ -51,7 +51,7 @@ const storage = multer.diskStorage({
   destination: "uploads",
   filename: (req, file, cb) => {
     cb(null, Date.now() + "-" + file.originalname);
-  },
+  }
 });
 
 const upload = multer({
@@ -63,7 +63,7 @@ const upload = multer({
     } else {
       cb(new Error("Only audio files allowed"));
     }
-  },
+  }
 });
 
 /* ===============================
@@ -88,31 +88,33 @@ app.post("/upload", upload.single("audio"), async (req, res) => {
     const outputPath = path.join("output", outputFileName);
 
     ffmpeg(req.file.path)
-      .audioBitrate(64) // compression
+      .audioBitrate(64) // compression only
       .save(outputPath)
       .on("end", async () => {
+        // Save to database
         await Audio.create({
           originalName: req.file.originalname,
           compressedName: outputFileName,
-          originalSize: req.file.size,
+          originalSize: req.file.size
         });
 
         res.json({
           message: "Audio compressed successfully",
-          file: outputFileName,
+          file: outputFileName
         });
       })
       .on("error", (err) => {
         console.error("FFmpeg error:", err);
         res.status(500).json({ error: "Compression failed" });
       });
+
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: "Server error" });
   }
 });
 
-// Optional: history API
+// History API (DB verification)
 app.get("/history", async (req, res) => {
   const history = await Audio.find().sort({ createdAt: -1 });
   res.json(history);
