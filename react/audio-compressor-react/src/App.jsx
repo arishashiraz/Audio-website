@@ -1,10 +1,20 @@
 import { useState } from "react";
+import "./index.css";
 
 function App() {
   const [audioFile, setAudioFile] = useState(null);
   const [loading, setLoading] = useState(false);
-  const [downloadFile, setDownloadFile] = useState(null);
   const [message, setMessage] = useState("");
+
+  const handleDrop = (e) => {
+    e.preventDefault();
+    const file = e.dataTransfer.files[0];
+    if (file && file.type.startsWith("audio/")) {
+      setAudioFile(file);
+    } else {
+      alert("Please upload a valid audio file");
+    }
+  };
 
   const handleUpload = async () => {
     if (!audioFile) {
@@ -17,23 +27,33 @@ function App() {
 
     try {
       setLoading(true);
-      setMessage("");
+      setMessage("Compressing audio… ⏳");
 
-      const response = await fetch("https://audio-compressor-backend.onrender.com/upload", {
-        method: "POST",
-        body: formData,
-      });
+      const response = await fetch(
+        "https://audio-compressor-backend.onrender.com/upload",
+        {
+          method: "POST",
+          body: formData,
+        }
+      );
 
       const data = await response.json();
 
-      if (response.ok) {
-        setDownloadFile(data.file);
-        setMessage("Audio compressed successfully ✅");
-      } else {
+      if (!response.ok) {
         setMessage("Compression failed ❌");
+        return;
       }
+
+      setMessage("Download starting… ✅");
+
+      // AUTO DOWNLOAD
+      const link = document.createElement("a");
+      link.href = `https://audio-compressor-backend.onrender.com/output/${data.file}`;
+      link.download = data.file;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
     } catch (error) {
-      console.error(error);
       setMessage("Server error ❌");
     } finally {
       setLoading(false);
@@ -41,8 +61,20 @@ function App() {
   };
 
   return (
-    <div style={{ padding: "40px", fontFamily: "Arial" }}>
+    <div className="container">
       <h2>🎵 Audio Compressor</h2>
+
+      <div
+        className="drop-box"
+        onDragOver={(e) => e.preventDefault()}
+        onDrop={handleDrop}
+      >
+        {audioFile ? (
+          <p>📂 {audioFile.name}</p>
+        ) : (
+          <p>Drag & Drop Audio File Here</p>
+        )}
+      </div>
 
       <input
         type="file"
@@ -50,29 +82,16 @@ function App() {
         onChange={(e) => setAudioFile(e.target.files[0])}
       />
 
-      <br /><br />
-
       <button onClick={handleUpload} disabled={loading}>
         {loading ? "Compressing..." : "Upload & Compress"}
       </button>
 
-      <br /><br />
-
       {message && <p>{message}</p>}
-
-      {downloadFile && (
-        <a
-         href={`https://audio-compressor-backend.onrender.com/output/${downloadFile}`}
-        >
-          ⬇️ Download Compressed Audio
-        </a>
-      )}
     </div>
   );
 }
 
 export default App;
-
 
 
 

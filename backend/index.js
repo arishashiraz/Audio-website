@@ -17,15 +17,16 @@ const PORT = process.env.PORT || 5000;
 /* ===============================
    DATABASE CONNECTION
    =============================== */
-mongoose.connect(process.env.MONGO_URI)
+mongoose
+  .connect(process.env.MONGO_URI)
   .then(() => console.log("MongoDB connected"))
-  .catch(err => console.error(err));
+  .catch((err) => console.error(err));
 
 const AudioSchema = new mongoose.Schema({
   originalName: String,
   compressedName: String,
   originalSize: Number,
-  createdAt: { type: Date, default: Date.now }
+  createdAt: { type: Date, default: Date.now },
 });
 
 const Audio = mongoose.model("Audio", AudioSchema);
@@ -50,19 +51,19 @@ const storage = multer.diskStorage({
   destination: "uploads",
   filename: (req, file, cb) => {
     cb(null, Date.now() + "-" + file.originalname);
-  }
+  },
 });
 
 const upload = multer({
   storage,
-  limits: { fileSize: 10 * 1024 * 1024 }, // 10MB
+  limits: { fileSize: 10 * 1024 * 1024 }, // 10 MB
   fileFilter: (req, file, cb) => {
     if (file.mimetype.startsWith("audio/")) {
       cb(null, true);
     } else {
       cb(new Error("Only audio files allowed"));
     }
-  }
+  },
 });
 
 /* ===============================
@@ -81,35 +82,32 @@ app.post("/upload", upload.single("audio"), async (req, res) => {
       return res.status(400).json({ error: "No file uploaded" });
     }
 
-    // Get original extension
+    // Preserve original extension
     const ext = path.extname(req.file.originalname);
-
-    // Output filename keeps SAME extension
     const outputFileName = `compressed-${Date.now()}${ext}`;
     const outputPath = path.join("output", outputFileName);
 
     ffmpeg(req.file.path)
-      .audioBitrate(64) // compression happens here
+      .audioBitrate(64) // compression
       .save(outputPath)
       .on("end", async () => {
         await Audio.create({
           originalName: req.file.originalname,
           compressedName: outputFileName,
-          originalSize: req.file.size
+          originalSize: req.file.size,
         });
 
         res.json({
           message: "Audio compressed successfully",
-          file: outputFileName
+          file: outputFileName,
         });
       })
       .on("error", (err) => {
         console.error("FFmpeg error:", err);
         res.status(500).json({ error: "Compression failed" });
       });
-
-  } catch (error) {
-    console.error(error);
+  } catch (err) {
+    console.error(err);
     res.status(500).json({ error: "Server error" });
   }
 });
