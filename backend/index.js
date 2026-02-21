@@ -5,6 +5,15 @@ import multer from "multer";
 import path from "path";
 import ffmpeg from "fluent-ffmpeg";
 import ffmpegPath from "ffmpeg-static";
+import fs from "fs";
+
+if (!fs.existsSync("uploads")) {
+  fs.mkdirSync("uploads");
+}
+
+if (!fs.existsSync("output")) {
+  fs.mkdirSync("output");
+}
 
 dotenv.config();
 ffmpeg.setFfmpegPath(ffmpegPath);
@@ -28,6 +37,9 @@ const storage = multer.diskStorage({
 
 const upload = multer({
   storage,
+  limits: {
+    fileSize: 10 * 1024 * 1024 // 10 MB
+  },
   fileFilter: (req, file, cb) => {
     if (file.mimetype.startsWith("audio/")) {
       cb(null, true);
