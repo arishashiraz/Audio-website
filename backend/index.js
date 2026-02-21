@@ -3,10 +3,19 @@ import cors from "cors";
 import dotenv from "dotenv";
 import multer from "multer";
 import path from "path";
+import fs from "fs";
 import ffmpeg from "fluent-ffmpeg";
 import ffmpegPath from "ffmpeg-static";
-import fs from "fs";
 
+dotenv.config();
+ffmpeg.setFfmpegPath(ffmpegPath);
+
+const app = express();
+const PORT = process.env.PORT || 5000;
+
+/* ===============================
+   RENDER FIX: ENSURE FOLDERS EXIST
+   =============================== */
 if (!fs.existsSync("uploads")) {
   fs.mkdirSync("uploads");
 }
@@ -15,19 +24,19 @@ if (!fs.existsSync("output")) {
   fs.mkdirSync("output");
 }
 
-dotenv.config();
-ffmpeg.setFfmpegPath(ffmpegPath);
-
-const app = express();
-const PORT = process.env.PORT || 5001;
-
+/* ===============================
+   MIDDLEWARE
+   =============================== */
 app.use(cors());
 app.use(express.json());
+app.use("/output", express.static("output"));
 
-// ---------- MULTER CONFIG ----------
+/* ===============================
+   MULTER CONFIG (RENDER SAFE)
+   =============================== */
 const storage = multer.diskStorage({
   destination: (req, file, cb) => {
-    cb(null, "uploads/");
+    cb(null, "uploads");
   },
   filename: (req, file, cb) => {
     const uniqueName = Date.now() + "-" + file.originalname;
@@ -38,29 +47,27 @@ const storage = multer.diskStorage({
 const upload = multer({
   storage,
   limits: {
-    fileSize: 10 * 1024 * 1024 // 10 MB
+    fileSize: 5 * 1024 * 1024 // 5MB (Render free tier safe)
   },
   fileFilter: (req, file, cb) => {
     if (file.mimetype.startsWith("audio/")) {
       cb(null, true);
     } else {
-      cb(new Error("Only audio files are allowed"), false);
+      cb(new Error("Only audio files allowed"), false);
     }
   }
 });
-app.use("/output", express.static("output"));
-app.use(cors());
-app.use(express.json());
 
-// 🔥 THIS LINE ENABLES DOWNLOAD LINKS
-app.use("/output", express.static("output"));
+/* ===============================
+   ROUTES
+   =============================== */
 
-// ---------- TEST ROUTE ----------
+// Health check (important for Render wake-up)
 app.get("/", (req, res) => {
   res.send("Backend is running 🚀");
 });
 
-// ---------- AUDIO UPLOAD + COMPRESSION ----------
+// Upload + Compress
 app.post("/upload", upload.single("audio"), (req, res) => {
   try {
     if (!req.file) {
@@ -81,16 +88,19 @@ app.post("/upload", upload.single("audio"), (req, res) => {
         });
       })
       .on("error", (err) => {
-        console.error(err);
+        console.error("FFmpeg error:", err);
         res.status(500).json({ error: "Audio compression failed" });
       });
 
   } catch (error) {
-    res.status(500).json({ error: "Something went wrong" });
+    console.error("Server error:", error);
+    res.status(500).json({ error: "Server error" });
   }
 });
 
-// ---------- SERVER START ----------
+/* ===============================
+   SERVER START
+   =============================== */
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
 });
