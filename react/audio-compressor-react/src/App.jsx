@@ -19,7 +19,7 @@ function App() {
       setLoading(true);
       setMessage("");
 
-      const response = await fetch("http://localhost:5001/upload", {
+      const response = await fetch("https://audio-compressor-backend.onrender.com/upload", {
         method: "POST",
         body: formData,
       });
@@ -62,8 +62,7 @@ function App() {
 
       {downloadFile && (
         <a
-          href={`http://localhost:5001/output/${downloadFile}`}
-          download
+         href={`https://audio-compressor-backend.onrender.com/output/${downloadFile}`}
         >
           ⬇️ Download Compressed Audio
         </a>
