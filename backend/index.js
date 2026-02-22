@@ -72,7 +72,7 @@ app.post("/upload", upload.single("audio"), async (req, res) => {
   try {
     let cmd = ffmpeg(req.file.path);
 
-    // 🔥 FORMAT-AWARE COMPRESSION (CORE FIX)
+    // FORMAT-AWARE COMPRESSION
     if (ext === ".wav") {
       cmd.audioChannels(1).audioFrequency(22050);
     } else {
@@ -94,7 +94,7 @@ app.post("/upload", upload.single("audio"), async (req, res) => {
       })
       .save(outputPath);
 
-    // ⏱ HARD SAFETY NET (NO MORE HANGS)
+    // SAFETY TIMEOUT
     setTimeout(() => {
       respondOnce(500, { error: "Compression timeout" });
     }, 30000);
@@ -106,5 +106,5 @@ app.post("/upload", upload.single("audio"), async (req, res) => {
 });
 
 app.listen(PORT, () =>
-  console.log(`Server running on ${PORT}`)
+  console.log(`Server running on port ${PORT}`)
 );

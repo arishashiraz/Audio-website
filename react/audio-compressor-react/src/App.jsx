@@ -11,7 +11,8 @@ export default function App() {
   const valid = f =>
     ALLOWED.includes(f.name.slice(f.name.lastIndexOf(".")).toLowerCase());
 
-  const pick = f => valid(f) ? setFile(f) : alert("Unsupported audio format");
+  const pick = f =>
+    valid(f) ? setFile(f) : alert("Unsupported audio format");
 
   const upload = async () => {
     if (!file) return alert("Select a file");
@@ -68,7 +69,6 @@ export default function App() {
     </div>
   );
 }
-
 
 
 
