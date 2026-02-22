@@ -15,12 +15,12 @@ const app = express();
 const PORT = process.env.PORT || 5000;
 
 /* ===============================
-   DATABASE CONNECTION
+   DATABASE
    =============================== */
 mongoose
   .connect(process.env.MONGO_URI)
   .then(() => console.log("MongoDB connected"))
-  .catch((err) => console.error(err));
+  .catch(err => console.error(err));
 
 const AudioSchema = new mongoose.Schema({
   originalName: String,
@@ -32,7 +32,7 @@ const AudioSchema = new mongoose.Schema({
 const Audio = mongoose.model("Audio", AudioSchema);
 
 /* ===============================
-   ENSURE FOLDERS (Render-safe)
+   FOLDERS (Render safe)
    =============================== */
 if (!fs.existsSync("uploads")) fs.mkdirSync("uploads");
 if (!fs.existsSync("output")) fs.mkdirSync("output");
@@ -45,7 +45,7 @@ app.use(express.json());
 app.use("/output", express.static("output"));
 
 /* ===============================
-   MULTER CONFIG (ALL AUDIO TYPES)
+   MULTER
    =============================== */
 const storage = multer.diskStorage({
   destination: "uploads",
@@ -56,42 +56,40 @@ const storage = multer.diskStorage({
 
 const upload = multer({
   storage,
-  limits: { fileSize: 10 * 1024 * 1024 }, // 10 MB
+  limits: { fileSize: 15 * 1024 * 1024 },
   fileFilter: (req, file, cb) => {
-    if (file.mimetype.startsWith("audio/")) {
-      cb(null, true);
-    } else {
-      cb(new Error("Only audio files allowed"));
-    }
+    if (file.mimetype.startsWith("audio/")) cb(null, true);
+    else cb(new Error("Only audio files allowed"));
   }
 });
 
 /* ===============================
    ROUTES
    =============================== */
-
-// Health check
 app.get("/", (req, res) => {
   res.send("Backend is running 🚀");
 });
 
-// Upload + Compress (FORMAT PRESERVED)
 app.post("/upload", upload.single("audio"), async (req, res) => {
   try {
-    if (!req.file) {
-      return res.status(400).json({ error: "No file uploaded" });
-    }
-
-    // Preserve original extension
-    const ext = path.extname(req.file.originalname);
+    const ext = path.extname(req.file.originalname).toLowerCase();
     const outputFileName = `compressed-${Date.now()}${ext}`;
     const outputPath = path.join("output", outputFileName);
 
-    ffmpeg(req.file.path)
-      .audioBitrate(64) // compression only
+    let command = ffmpeg(req.file.path);
+
+    // 🔥 FORMAT-AWARE COMPRESSION (CORE FIX)
+    if (ext === ".wav") {
+      command
+        .audioChannels(1)
+        .audioFrequency(22050);
+    } else {
+      command.audioBitrate(64);
+    }
+
+    command
       .save(outputPath)
       .on("end", async () => {
-        // Save to database
         await Audio.create({
           originalName: req.file.originalname,
           compressedName: outputFileName,
@@ -114,15 +112,11 @@ app.post("/upload", upload.single("audio"), async (req, res) => {
   }
 });
 
-// History API (DB verification)
 app.get("/history", async (req, res) => {
   const history = await Audio.find().sort({ createdAt: -1 });
   res.json(history);
 });
 
-/* ===============================
-   SERVER START
-   =============================== */
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
 });

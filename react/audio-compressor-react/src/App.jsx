@@ -1,19 +1,45 @@
 import { useState } from "react";
 import "./index.css";
 
+const allowedExtensions = [
+  ".mp3", ".wav", ".m4a", ".aac", ".ogg", ".flac", ".opus"
+];
+
 function App() {
   const [audioFile, setAudioFile] = useState(null);
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState("");
 
+  const isValidAudio = (file) => {
+    const ext = file.name
+      .substring(file.name.lastIndexOf("."))
+      .toLowerCase();
+    return allowedExtensions.includes(ext);
+  };
+
   const handleDrop = (e) => {
     e.preventDefault();
     const file = e.dataTransfer.files[0];
-    if (file && file.type.startsWith("audio/")) {
-      setAudioFile(file);
-    } else {
-      alert("Please upload a valid audio file");
+    if (!file) return;
+
+    if (!isValidAudio(file)) {
+      alert("Unsupported audio format");
+      return;
     }
+
+    setAudioFile(file);
+  };
+
+  const handleFileSelect = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    if (!isValidAudio(file)) {
+      alert("Unsupported audio format");
+      return;
+    }
+
+    setAudioFile(file);
   };
 
   const handleUpload = async () => {
@@ -50,7 +76,7 @@ function App() {
       window.location.href =
         `https://audio-compressor-backend.onrender.com/output/${data.file}`;
 
-    } catch (error) {
+    } catch (err) {
       setMessage("Server error ❌");
     } finally {
       setLoading(false);
@@ -75,8 +101,8 @@ function App() {
 
       <input
         type="file"
-        accept="audio/*"
-        onChange={(e) => setAudioFile(e.target.files[0])}
+        accept=".mp3,.wav,.m4a,.aac,.ogg,.flac,.opus"
+        onChange={handleFileSelect}
       />
 
       <button onClick={handleUpload} disabled={loading}>
@@ -89,7 +115,6 @@ function App() {
 }
 
 export default App;
-
 
 
 
