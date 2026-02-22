@@ -6,28 +6,22 @@ import path from "path";
 import fs from "fs";
 import ffmpeg from "fluent-ffmpeg";
 import ffmpegPath from "ffmpeg-static";
-import mongoose from "mongoose";
+import pkg from "pg";
 
 dotenv.config();
 ffmpeg.setFfmpegPath(ffmpegPath);
 
+const { Pool } = pkg;
 const app = express();
 const PORT = process.env.PORT || 5000;
 
-/* ================= DATABASE ================= */
-mongoose.connect(process.env.MONGO_URI)
-  .then(() => console.log("MongoDB connected"))
-  .catch(err => console.error(err));
-
-const Audio = mongoose.model(
-  "Audio",
-  new mongoose.Schema({
-    originalName: String,
-    compressedName: String,
-    originalSize: Number,
-    createdAt: { type: Date, default: Date.now }
-  })
-);
+/* ================= POSTGRES ================= */
+const pool = new Pool({
+  connectionString: process.env.DATABASE_URL,
+  ssl: process.env.DATABASE_URL?.includes("render")
+    ? { rejectUnauthorized: false }
+    : false
+});
 
 /* ================= FOLDERS ================= */
 ["uploads", "output"].forEach(dir => {
@@ -50,17 +44,16 @@ const upload = multer({
   fileFilter: (_, file, cb) =>
     file.mimetype.startsWith("audio/")
       ? cb(null, true)
-      : cb(new Error("Invalid audio"))
+      : cb(new Error("Invalid audio file"))
 });
 
 /* ================= ROUTES ================= */
-app.get("/", (_, res) => res.send("Backend running 🚀"));
+
+app.get("/", (_, res) => {
+  res.send("Backend running 🚀");
+});
 
 app.post("/upload", upload.single("audio"), async (req, res) => {
-  const ext = path.extname(req.file.originalname).toLowerCase();
-  const outputFile = `compressed-${Date.now()}${ext}`;
-  const outputPath = path.join("output", outputFile);
-
   let responded = false;
   const respondOnce = (status, data) => {
     if (!responded) {
@@ -70,22 +63,27 @@ app.post("/upload", upload.single("audio"), async (req, res) => {
   };
 
   try {
-    let cmd = ffmpeg(req.file.path);
+    const ext = path.extname(req.file.originalname).toLowerCase();
+    const outputFile = `compressed-${Date.now()}${ext}`;
+    const outputPath = path.join("output", outputFile);
+
+    let command = ffmpeg(req.file.path);
 
     // FORMAT-AWARE COMPRESSION
     if (ext === ".wav") {
-      cmd.audioChannels(1).audioFrequency(22050);
+      command.audioChannels(1).audioFrequency(22050);
     } else {
-      cmd.audioBitrate("64k").outputOptions("-vn");
+      command.audioBitrate("64k").outputOptions("-vn");
     }
 
-    cmd
+    command
       .on("end", async () => {
-        await Audio.create({
-          originalName: req.file.originalname,
-          compressedName: outputFile,
-          originalSize: req.file.size
-        });
+        await pool.query(
+          `INSERT INTO audio_files (original_name, compressed_name, original_size)
+           VALUES ($1, $2, $3)`,
+          [req.file.originalname, outputFile, req.file.size]
+        );
+
         respondOnce(200, { file: outputFile });
       })
       .on("error", err => {
@@ -94,7 +92,7 @@ app.post("/upload", upload.single("audio"), async (req, res) => {
       })
       .save(outputPath);
 
-    // SAFETY TIMEOUT
+    // SAFETY TIMEOUT (NO HANGING)
     setTimeout(() => {
       respondOnce(500, { error: "Compression timeout" });
     }, 30000);
@@ -105,6 +103,6 @@ app.post("/upload", upload.single("audio"), async (req, res) => {
   }
 });
 
-app.listen(PORT, () =>
-  console.log(`Server running on port ${PORT}`)
-);
+app.listen(PORT, () => {
+  console.log(`Server running on port ${PORT}`);
+});
