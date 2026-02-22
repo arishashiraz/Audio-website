@@ -14,109 +14,97 @@ ffmpeg.setFfmpegPath(ffmpegPath);
 const app = express();
 const PORT = process.env.PORT || 5000;
 
-/* ===============================
-   DATABASE
-   =============================== */
-mongoose
-  .connect(process.env.MONGO_URI)
+/* ================= DATABASE ================= */
+mongoose.connect(process.env.MONGO_URI)
   .then(() => console.log("MongoDB connected"))
   .catch(err => console.error(err));
 
-const AudioSchema = new mongoose.Schema({
-  originalName: String,
-  compressedName: String,
-  originalSize: Number,
-  createdAt: { type: Date, default: Date.now }
+const Audio = mongoose.model(
+  "Audio",
+  new mongoose.Schema({
+    originalName: String,
+    compressedName: String,
+    originalSize: Number,
+    createdAt: { type: Date, default: Date.now }
+  })
+);
+
+/* ================= FOLDERS ================= */
+["uploads", "output"].forEach(dir => {
+  if (!fs.existsSync(dir)) fs.mkdirSync(dir);
 });
 
-const Audio = mongoose.model("Audio", AudioSchema);
-
-/* ===============================
-   FOLDERS (Render safe)
-   =============================== */
-if (!fs.existsSync("uploads")) fs.mkdirSync("uploads");
-if (!fs.existsSync("output")) fs.mkdirSync("output");
-
-/* ===============================
-   MIDDLEWARE
-   =============================== */
+/* ================= MIDDLEWARE ================= */
 app.use(cors());
 app.use(express.json());
 app.use("/output", express.static("output"));
 
-/* ===============================
-   MULTER
-   =============================== */
-const storage = multer.diskStorage({
-  destination: "uploads",
-  filename: (req, file, cb) => {
-    cb(null, Date.now() + "-" + file.originalname);
-  }
-});
-
+/* ================= MULTER ================= */
 const upload = multer({
-  storage,
-  limits: { fileSize: 15 * 1024 * 1024 },
-  fileFilter: (req, file, cb) => {
-    if (file.mimetype.startsWith("audio/")) cb(null, true);
-    else cb(new Error("Only audio files allowed"));
-  }
+  storage: multer.diskStorage({
+    destination: "uploads",
+    filename: (_, file, cb) =>
+      cb(null, Date.now() + "-" + file.originalname)
+  }),
+  limits: { fileSize: 20 * 1024 * 1024 },
+  fileFilter: (_, file, cb) =>
+    file.mimetype.startsWith("audio/")
+      ? cb(null, true)
+      : cb(new Error("Invalid audio"))
 });
 
-/* ===============================
-   ROUTES
-   =============================== */
-app.get("/", (req, res) => {
-  res.send("Backend is running 🚀");
-});
+/* ================= ROUTES ================= */
+app.get("/", (_, res) => res.send("Backend running 🚀"));
 
 app.post("/upload", upload.single("audio"), async (req, res) => {
-  try {
-    const ext = path.extname(req.file.originalname).toLowerCase();
-    const outputFileName = `compressed-${Date.now()}${ext}`;
-    const outputPath = path.join("output", outputFileName);
+  const ext = path.extname(req.file.originalname).toLowerCase();
+  const outputFile = `compressed-${Date.now()}${ext}`;
+  const outputPath = path.join("output", outputFile);
 
-    let command = ffmpeg(req.file.path);
+  let responded = false;
+  const respondOnce = (status, data) => {
+    if (!responded) {
+      responded = true;
+      res.status(status).json(data);
+    }
+  };
+
+  try {
+    let cmd = ffmpeg(req.file.path);
 
     // 🔥 FORMAT-AWARE COMPRESSION (CORE FIX)
     if (ext === ".wav") {
-      command
-        .audioChannels(1)
-        .audioFrequency(22050);
+      cmd.audioChannels(1).audioFrequency(22050);
     } else {
-      command.audioBitrate(64);
+      cmd.audioBitrate("64k").outputOptions("-vn");
     }
 
-    command
-      .save(outputPath)
+    cmd
       .on("end", async () => {
         await Audio.create({
           originalName: req.file.originalname,
-          compressedName: outputFileName,
+          compressedName: outputFile,
           originalSize: req.file.size
         });
-
-        res.json({
-          message: "Audio compressed successfully",
-          file: outputFileName
-        });
+        respondOnce(200, { file: outputFile });
       })
-      .on("error", (err) => {
-        console.error("FFmpeg error:", err);
-        res.status(500).json({ error: "Compression failed" });
-      });
+      .on("error", err => {
+        console.error(err);
+        respondOnce(500, { error: "Compression failed" });
+      })
+      .save(outputPath);
+
+    // ⏱ HARD SAFETY NET (NO MORE HANGS)
+    setTimeout(() => {
+      respondOnce(500, { error: "Compression timeout" });
+    }, 30000);
 
   } catch (err) {
     console.error(err);
-    res.status(500).json({ error: "Server error" });
+    respondOnce(500, { error: "Server error" });
   }
 });
 
-app.get("/history", async (req, res) => {
-  const history = await Audio.find().sort({ createdAt: -1 });
-  res.json(history);
-});
-
-app.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
-});
+app.listen(PORT, () =>
+  console.log(`Server running on ${PORT}`)
+);
