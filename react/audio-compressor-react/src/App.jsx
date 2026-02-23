@@ -1,43 +1,58 @@
-import { useState } from "react";
-import "./index.css";
-
-const ALLOWED = [".mp3", ".wav", ".m4a", ".aac", ".ogg", ".flac", ".opus"];
+import { useState, useRef } from "react";
+import "./App.css";
 
 export default function App() {
   const [file, setFile] = useState(null);
-  const [msg, setMsg] = useState("");
+  const [status, setStatus] = useState("");
   const [loading, setLoading] = useState(false);
+  const inputRef = useRef();
 
-  const valid = f =>
-    ALLOWED.includes(f.name.slice(f.name.lastIndexOf(".")).toLowerCase());
+  const handleFile = (f) => {
+    if (!f) return;
+    setFile(f);
+    setStatus("");
+  };
 
-  const pick = f =>
-    valid(f) ? setFile(f) : alert("Unsupported audio format");
+  const handleDrop = (e) => {
+    e.preventDefault();
+    handleFile(e.dataTransfer.files[0]);
+  };
 
-  const upload = async () => {
-    if (!file) return alert("Select a file");
+  const compressAudio = async () => {
+    if (!file) return;
 
-    const fd = new FormData();
-    fd.append("audio", file);
+    setLoading(true);
+    setStatus("Compressing audio... ⏳");
+
+    const formData = new FormData();
+    formData.append("audio", file);
 
     try {
-      setLoading(true);
-      setMsg("Compressing audio… ⏳");
-
-      const r = await fetch(
-        "https://audio-compressor-backend.onrender.com/upload",
-        { method: "POST", body: fd }
+      const res = await fetch(
+        "https://audio-compressor-backend.onrender.com/compress",
+        {
+          method: "POST",
+          body: formData,
+        }
       );
 
-      const d = await r.json();
-      if (!r.ok) throw new Error(d.error);
+      if (!res.ok) throw new Error("Server error");
 
-      setMsg("Download starting… ✅");
-      window.location.href =
-        `https://audio-compressor-backend.onrender.com/output/${d.file}`;
+      const blob = await res.blob();
 
-    } catch (e) {
-      setMsg(e.message || "Failed ❌");
+      // 🔽 AUTO DOWNLOAD
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = file.name; // same format
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+
+      setStatus("Audio compressed & downloaded ✅");
+    } catch (err) {
+      console.error(err);
+      setStatus("Compression failed ❌");
     } finally {
       setLoading(false);
     }
@@ -45,27 +60,34 @@ export default function App() {
 
   return (
     <div className="container">
-      <h2>🎵 Audio Compressor</h2>
+      <h1>🎵 Audio Compressor</h1>
 
       <div
         className="drop-box"
-        onDragOver={e => e.preventDefault()}
-        onDrop={e => pick(e.dataTransfer.files[0])}
+        onDragOver={(e) => e.preventDefault()}
+        onDrop={handleDrop}
+        onClick={() => inputRef.current.click()}
       >
-        {file ? file.name : "Drag & Drop Audio Here"}
+        {file ? (
+          <p>📁 {file.name}</p>
+        ) : (
+          <p>Drag & drop audio here or click to choose</p>
+        )}
       </div>
 
       <input
         type="file"
-        accept={ALLOWED.join(",")}
-        onChange={e => pick(e.target.files[0])}
+        ref={inputRef}
+        hidden
+        accept="audio/*"
+        onChange={(e) => handleFile(e.target.files[0])}
       />
 
-      <button disabled={loading} onClick={upload}>
-        {loading ? "Compressing…" : "Upload & Compress"}
+      <button onClick={compressAudio} disabled={loading || !file}>
+        {loading ? "Compressing..." : "Upload & Compress"}
       </button>
 
-      {msg && <p>{msg}</p>}
+      {status && <p className="status">{status}</p>}
     </div>
   );
 }
